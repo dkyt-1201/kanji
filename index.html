@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>かんたん漢字辞典</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  font-family: sans-serif;
+  background: #f5f7fa;
+  color: #222;
+  margin: 0;
+  padding: 18px;
+}
+main { max-width: 600px; margin: auto; }
+h1 { text-align: center; font-size: 30px; }
+label { display: block; font-size: 22px; margin: 20px 0 8px; }
+input {
+  width: 100%;
+  padding: 16px;
+  font-size: 28px;
+  border: 2px solid #777;
+  border-radius: 12px;
+}
+button {
+  cursor: pointer;
+  border-radius: 12px;
+  font-size: 25px;
+  padding: 17px;
+}
+#search {
+  width: 100%;
+  background: #1767c9;
+  color: white;
+  border: 0;
+  margin-top: 15px;
+}
+#results {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+.word {
+  background: white;
+  border: 2px solid #ddd;
+  font-size: 32px;
+  min-height: 85px;
+  overflow-wrap: anywhere;
+}
+#message { font-size: 19px; }
+#detail {
+  display: none;
+  text-align: center;
+  background: white;
+  padding: 25px;
+  border-radius: 15px;
+  margin-top: 20px;
+}
+#bigword { font-size: 48px; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main>
+<h1>漢字をさがす</h1>
+<label for="reading">ひらがなを入力</label>
+<input id="reading" type="text" placeholder="例：こうしょう">
+<button id="search" onclick="searchKanji()">漢字をさがす</button>
+<p id="message" aria-live="polite"></p>
+<div id="results"></div>
+<div id="detail">
+  <div id="bigword"></div>
+  <button onclick="document.getElementById('detail').style.display='none'">もどる</button>
+</div>
+</main>
+<script>
+async function searchKanji() {
+  const reading = document.getElementById('reading').value.trim();
+  const results = document.getElementById('results');
+  const message = document.getElementById('message');
+  results.innerHTML = '';
+  document.getElementById('detail').style.display = 'none';
+
+  if (!reading) {
+    message.textContent = 'ひらがなを入力してください';
+    return;
+  }
+
+  message.textContent = '漢字をさがしています…';
+
+  try {
+    const url = 'https://www.google.com/transliterate?langpair=' +
+      encodeURIComponent('ja-Hira|ja') +
+      '&text=' + encodeURIComponent(reading);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('通信エラー');
+    const data = await response.json();
+    const words = [...new Set(
+      data.flatMap(item => item[1] || [])
+    )];
+
+    message.textContent = words.length
+      ? '漢字を選んでください'
+      : '候補が見つかりませんでした';
+
+    words.forEach(word => {
+      const button = document.createElement('button');
+      button.className = 'word';
+      button.textContent = word;
+      button.onclick = () => {
+        document.getElementById('bigword').textContent = word;
+        document.getElementById('detail').style.display = 'block';
+      };
+      results.appendChild(button);
+    });
+  } catch (error) {
+    message.textContent =
+      '検索できませんでした。通信環境を確認してください。';
+  }
+}
+</script>
+</body>
+</html>
