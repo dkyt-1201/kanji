@@ -1,125 +1,196 @@
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>かんたん漢字辞典</title>
 <style>
-* { box-sizing: border-box; }
-body {
-  font-family: sans-serif;
-  background: #f5f7fa;
-  color: #222;
-  margin: 0;
-  padding: 18px;
-}
-main { max-width: 600px; margin: auto; }
-h1 { text-align: center; font-size: 30px; }
-label { display: block; font-size: 22px; margin: 20px 0 8px; }
-input {
-  width: 100%;
-  padding: 16px;
-  font-size: 28px;
-  border: 2px solid #777;
-  border-radius: 12px;
-}
-button {
-  cursor: pointer;
-  border-radius: 12px;
-  font-size: 25px;
-  padding: 17px;
-}
-#search {
-  width: 100%;
-  background: #1767c9;
-  color: white;
-  border: 0;
-  margin-top: 15px;
-}
-#results {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-top: 18px;
-}
-.word {
-  background: white;
-  border: 2px solid #ddd;
-  font-size: 32px;
-  min-height: 85px;
-  overflow-wrap: anywhere;
-}
-#message { font-size: 19px; }
-#detail {
-  display: none;
-  text-align: center;
-  background: white;
-  padding: 25px;
-  border-radius: 15px;
-  margin-top: 20px;
-}
-#bigword { font-size: 48px; overflow-wrap: anywhere; }
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;margin:0;background:#f3f6fa;color:#172334}
+main{max-width:620px;margin:auto;padding:20px 16px 50px}
+h1{text-align:center;font-size:30px}
+label{font-size:22px;font-weight:bold;display:block;margin-bottom:10px}
+input{width:100%;border:3px solid #8795a6;border-radius:14px;padding:16px;font-size:30px}
+button{font-family:inherit;cursor:pointer}
+#go{width:100%;margin-top:14px;padding:18px;background:#155fb6;color:white;border:0;border-radius:14px;font-size:26px;font-weight:bold}
+#status{font-size:18px;min-height:28px}
+#grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.candidate{min-height:88px;padding:10px 6px;border:2px solid #d4dbe4;border-radius:14px;background:white;font-size:clamp(25px,7vw,37px);overflow-wrap:anywhere}
+#more{display:none;width:100%;padding:16px;margin-top:16px;font-size:22px;background:white;border:2px solid #155fb6;border-radius:12px;color:#155fb6}
+#overlay{display:none;position:fixed;inset:0;background:#0009;align-items:center;justify-content:center;padding:18px}
+#modal{background:white;border-radius:20px;padding:28px 18px;text-align:center;width:100%;max-width:520px}
+#large{font-size:clamp(46px,12vw,76px);overflow-wrap:anywhere;margin:25px 0}
+#close{padding:14px 45px;font-size:25px;background:#155fb6;color:white;border:0;border-radius:12px}
+footer{font-size:13px;color:#566;line-height:1.7;margin-top:34px}
 </style>
 </head>
 <body>
 <main>
 <h1>漢字をさがす</h1>
-<label for="reading">ひらがなを入力</label>
-<input id="reading" type="text" placeholder="例：こうしょう">
-<button id="search" onclick="searchKanji()">漢字をさがす</button>
-<p id="message" aria-live="polite"></p>
-<div id="results"></div>
-<div id="detail">
-  <div id="bigword"></div>
-  <button onclick="document.getElementById('detail').style.display='none'">もどる</button>
-</div>
+<label for="kana">ひらがなを入力</label>
+<input id="kana" type="text" placeholder="例：こうしょう" autocomplete="off">
+<button id="go">漢字をさがす</button>
+<p id="status" aria-live="polite">辞書を準備しています…</p>
+<div id="grid"></div>
+<button id="more">ほかの漢字を見る</button>
+<footer>
+辞書：SKK辞書
+（<a href="https://github.com/skk-dev/dict">提供元・ライセンス情報</a>）。
+初回は辞書の読み込みにインターネットが必要です。
+</footer>
 </main>
+<div id="overlay" role="dialog" aria-modal="true">
+<div id="modal">
+<div id="large"></div>
+<button id="close">もどる</button>
+</div>
+</div>
 <script>
-async function searchKanji() {
-  const reading = document.getElementById('reading').value.trim();
-  const results = document.getElementById('results');
-  const message = document.getElementById('message');
-  results.innerHTML = '';
-  document.getElementById('detail').style.display = 'none';
+'use strict';
+const $ = id => document.getElementById(id);
+let dictionary = new Map();
+let found = [];
+let visible = 0;
 
-  if (!reading) {
-    message.textContent = 'ひらがなを入力してください';
-    return;
-  }
-
-  message.textContent = '漢字をさがしています…';
-
-  try {
-    const url = 'https://www.google.com/transliterate?langpair=' +
-      encodeURIComponent('ja-Hira|ja') +
-      '&text=' + encodeURIComponent(reading);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('通信エラー');
-    const data = await response.json();
-    const words = [...new Set(
-      data.flatMap(item => item[1] || [])
-    )];
-
-    message.textContent = words.length
-      ? '漢字を選んでください'
-      : '候補が見つかりませんでした';
-
-    words.forEach(word => {
-      const button = document.createElement('button');
-      button.className = 'word';
-      button.textContent = word;
-      button.onclick = () => {
-        document.getElementById('bigword').textContent = word;
-        document.getElementById('detail').style.display = 'block';
-      };
-      results.appendChild(button);
-    });
-  } catch (error) {
-    message.textContent =
-      '検索できませんでした。通信環境を確認してください。';
-  }
+const fallback = {
+ 'こうしょう':['交渉','高尚','公称','考証','口承','校章','工廠','鉱床'],
+ 'かんじ':['漢字','感じ','幹事','監事'],
+ 'きかい':['機会','機械','器械','奇怪'],
+ 'せいかく':['性格','正確','声楽'],
+ 'ばら':['薔薇'],
+ 'とうきょう':['東京'],
+ 'にほん':['日本'],
+ 'ひたち':['日立'],
+ 'みと':['水戸'],
+ 'かいしゃ':['会社'],
+ 'でんわ':['電話'],
+ 'じしょ':['辞書'],
+ 'けんこう':['健康'],
+ 'かぞく':['家族']
+};
+for(const [k,v] of Object.entries(fallback)){
+ dictionary.set(k,v);
 }
+
+function openDB(){
+ return new Promise((resolve,reject)=>{
+  const r=indexedDB.open('kanji-skk-cache-v1',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('files');
+  r.onsuccess=()=>resolve(r.result);
+  r.onerror=()=>reject(r.error);
+ });
+}
+async function cacheRead(){
+ try{
+  const db=await openDB();
+  return await new Promise(resolve=>{
+   const r=db.transaction('files','readonly')
+    .objectStore('files').get('skk');
+   r.onsuccess=()=>resolve(r.result);
+   r.onerror=()=>resolve(null);
+  });
+ }catch{return null;}
+}
+async function cacheWrite(value){
+ try{
+  const db=await openDB();
+  const tx=db.transaction('files','readwrite');
+  tx.objectStore('files').put(value,'skk');
+ }catch{}
+}
+function parseSKK(text){
+ let count=0;
+ for(const line of text.split(/\r?\n/)){
+  if(!line||line[0]===';')continue;
+  const pos=line.indexOf(' /');
+  if(pos<1)continue;
+  const key=line.slice(0,pos).trim();
+  if(!/^[ぁ-ゖー]+$/.test(key))continue;
+  const candidates=line.slice(pos+2).split('/')
+   .map(x=>x.split(';')[0].replace(/\[[^\]]*\]/g,'').trim())
+   .filter(x=>x&&/[一-龯々〆ヶ]/.test(x));
+  if(!candidates.length)continue;
+  const old=dictionary.get(key)||[];
+  dictionary.set(key,[...new Set([...old,...candidates])]);
+  count++;
+ }
+ return count;
+}
+async function load(){
+ try{
+  let txt=await cacheRead();
+  if(!txt){
+   $('status').textContent='辞書を読み込んでいます。少しお待ちください…';
+   const url='https://cdn.jsdelivr.net/gh/skk-dev/dict@master/SKK-JISYO.L';
+   const res=await fetch(url);
+   if(!res.ok)throw Error('取得失敗');
+   const bytes=await res.arrayBuffer();
+   txt=new TextDecoder('euc-jp').decode(bytes);
+   await cacheWrite(txt);
+  }
+  const n=parseSKK(txt);
+  if(n<1000)throw Error('辞書の形式を確認できません');
+  $('status').textContent='準備できました。ひらがなを入力してください。';
+ }catch(e){
+  $('status').textContent='辞書の取得に失敗しました。予備の言葉は検索できます。';
+  console.warn(e);
+ }
+}
+function normalize(s){
+ return s.trim().normalize('NFKC')
+  .replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96));
+}
+function render(){
+ const g=$('grid');
+ g.replaceChildren();
+ for(const word of found.slice(0,visible)){
+  const b=document.createElement('button');
+  b.className='candidate';
+  b.textContent=word;
+  b.onclick=()=>{
+   $('large').textContent=word;
+   $('overlay').style.display='flex';
+  };
+  g.appendChild(b);
+ }
+ $('more').style.display=visible<found.length?'block':'none';
+}
+function search(){
+ const key=normalize($('kana').value);
+ $('grid').replaceChildren();
+ $('more').style.display='none';
+ if(!key){
+  $('status').textContent='ひらがなを入力してください。';
+  return;
+ }
+ found=dictionary.get(key)||[];
+ visible=Math.min(8,found.length);
+ $('status').textContent=found.length
+  ? found.length+'件の候補があります。漢字を押すと大きく表示します。'
+  : '候補が見つかりませんでした。';
+ render();
+}
+$('go').onclick=search;
+$('kana').addEventListener('keydown',e=>{
+ if(e.key==='Enter'&&!e.isComposing){
+  e.preventDefault();
+  search();
+ }
+});
+$('more').onclick=()=>{
+ visible=Math.min(visible+12,found.length);
+ render();
+};
+$('close').onclick=()=>{
+ $('overlay').style.display='none';
+};
+$('overlay').onclick=e=>{
+ if(e.target===$('overlay')){
+  $('overlay').style.display='none';
+ }
+};
+load();
 </script>
 </body>
 </html>
